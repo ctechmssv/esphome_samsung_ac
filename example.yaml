@@ -1,11 +1,11 @@
-# This example provides a basic configuration and description based on the M5STACK components
-# For further configuration you should visit the ESPHome docs https://esphome.io
-# Every line starting with a # can be removed.
-
-## BASIC CONFIGURATION
+## PAUL ARUNDALE - SAMSUNG NASA ESPHOME INTERFACE WITH PWM PUMP CONTROL
 esphome:
-  name: samsung_ac
-  friendly_name: Climate
+  name: "atomashp"
+  friendly_name: Atom Samsung NASA
+  on_boot:
+    priority: -100.0
+    then:
+      - output.turn_on: grundfos_pwm
 
 # Select chipset and board configuration - in this case M5STACK
 esp32:
@@ -14,10 +14,10 @@ esp32:
 # [Optional] - Create web interface where you can control the AC from your web browser (without Home Assistant)
 web_server:
   port: 80
-
+  version: 3
+  local: true
 # Enable logging
 logger:
-  level: INFO
   logs:
     component: ERROR # Remove the "Your component takes to long to respond warning"
 
@@ -27,18 +27,55 @@ api:
 # Enable OTA firmware update, you will be able to upload the firmware over WiFi without connecting the device by cables
 ota:
   platform: esphome
+ 
 
 # Setup your WiFi password
 wifi:
-  ssid: "My WiFi Name" # !!!CHANGE ME!!!
-  password: "My WiFi Password" # !!!CHANGE ME!!!
-
+  ssid: !secret SSID
+  password: !secret WIFIPASSWORD
+  fast_connect: true
+  power_save_mode: none
+  reboot_timeout: 10 minutes
+  ap: {}
 captive_portal:
 
+# Example configuration entry
+udp:
+#  update_interval: 5s
+#  providers:
+#    - name: esp_sunamp
+
+output:
+  - platform: ledc
+    pin: 
+      number: GPIO25
+      inverted: false
+      mode: OUTPUT
+    id: grundfos_pwm
+    frequency: 500 Hz   
+    min_power: 0.0
+    max_power: 1.0
+    
+number:
+  - platform: template
+    name: "Grundfos PWM Output Control"
+    id: grundfos_pwm_output_control
+    optimistic: true
+    min_value: 0
+    max_value: 100
+    step: 1 
+    unit_of_measurement: "%"
+    on_value: 
+      then:
+        - output.set_level:
+            id: grundfos_pwm
+            level: !lambda "return x / 100.0;"
+        
+    
 # Specify pins used by the board to comunicate with RS485 board - in this case M5STACK
 uart:
-  tx_pin: GPIO19
-  rx_pin: GPIO22
+  tx_pin: GPIO26   # Use GPIO26 for ATOM Tail485 
+  rx_pin: GPIO32   # Use GPIO32 for ATOM Tail485
   # For older devices it could also be 2400. But you should start with 9600.
   baud_rate: 9600
   parity: EVEN
@@ -46,95 +83,128 @@ uart:
 ## SAMSUNG AC CONFIGURATION
 
 # Import custom component from GitHub
+#external_components:
+ # - source: github://omerfaruk-aran/esphome_samsung_hvac_bus@main # Use @stable if you want a more stable experience, but note a lot of this example code breaks.
+  #  components: [samsung_ac]
+  
 external_components:
-  - source: github://brazoayeye/esphome_samsung_ac@main
+  - source: github://ctechmssv/esphome_samsung_ac@rs485-fixes  #testSignedInt
     components: [samsung_ac]
+    refresh: 0s
 
 # Configuration of AC component
 samsung_ac:
 
-  #debug_log_messages: true < With this row, all read data from the bus is printed on the terminal
-   
-  # Capabilities configure the features alle devices of your AC system have (all parts of this section are optional). 
+   # Sends all NASA package values to MQTT so the can be analysed or monitored.
+  debug_mqtt_host: 10.10.10.10
+  debug_mqtt_port: 1883
+  debug_mqtt_username: user
+  debug_mqtt_password: password
+
+
+  flow_control_pin: GPIO33
+
+  # For NonNASA devices the following option can be enabled to prevent the device from sleeping when idle. This allows
+  # values like internal and external temperature to continue to be tracked when the device isn't in use.
+  #non_nasa_keepalive: true
+  
+  # When enabled (set to true), this option will log the messages associated with undefined codes on the device. This is useful for debugging and identifying any unexpected or unknown codes that the device may receive during operation.
+#  debug_log_undefined_messages: true
+  
+  # When enabled (set to true), this option logs messages associated with defined codes on the device. This helps in monitoring the behavior of the device by recording the activity related to known, expected codes.
+  debug_log_messages: true
+
+  # Capabilities configure the features that all devices of your AC system have (all parts of this section are optional). 
   # All capabilities are off by default, you need to enable only those your devices have.
-  # You can override or configure them also on a per devices basis (look below for that).
-  #capabilities: 
-  #  vertical_swing: true
-  #  horizontal_swing: true
-    # Presets define special AC modes like Windfree and so on. 
-    # The following modes are available: sleep, quiet, fast, longreach, windfree
-  #  presets: 
-      # short version
-  #    quiet: true
-      # long version - allows to locilize names
-  #    quiet:
-  #      name: "Makes no sound"
-  #      enabled: true
+  # You can override or configure them also on a per-device basis (look below for that).
+  capabilities: 
+  #  vertical_swing: false
+  #  horizontal_swing: false
+    # Presets define special AC modes like Windfree, Eco, and so on. 
+    # The following modes are available: sleep, quiet, fast, longreach, windfree, eco.
+    presets: 
+      # Short version - a quick and simple way to enable presets.
+      quiet: true
+      # Long version - allows customization, including localized names and control over enabling the presets.
+  #    fast:
+  #      name: "Fast cooling"
+  #      enabled: false
+
+ # debug_number:
+ #   - name: "debugFrom10"
+ #     source: "10.01.00"
+ #   - name: "debugFrom20"
+ #     source: "20.01.00" 
 
   devices:
     # Skip everything below on the first run! Wait a minute, watch your ESPHome logs until you see the "Discovered devices:" section and you see some addresses:
-    # For NASA devices it looks like this (with 4 indoor devices): 
+    # For NASA devices it looks like this (with 1 outdoor device and 4 indoor devices): 
+    #   Outdoor: 10.00.00
     #   Indoor:  20.00.00, 20.00.01, 20.00.02, 20.00.03
     # For NonNASA devices it looks like this (with 2 indoor devices): 
     #   Indoor:  00, 01
-    # You need this addresses for the the sections below. If you see only a "-" then you should visit the troubleshooting section in the readme. 
+    # You need these addresses for the the sections below. If you see only a "-" then you should visit the troubleshooting section in the readme. 
 
     # Repeat everything below for each indoor device address you see in your logs
     - address: "20.00.00" # Indoor device address 
       # Each property below is optional (climate, room_temperature etc.) - you can delete those which you dont need.
       # For the names we suggest to choose a combination of room name and the thing it controls. 
-
+      
+        
       # Configures/overrides the capabilites for this devices. 
       # Look above for all options.
-      #capabilities:
-      #  horizontal_swing: false # This device have no h swing. 
+#      capabilities:
+#        horizontal_swing: false # This device have no h swing. 
+
+#      water_temperature:
+#        name: "DHW Temperature"
+#        id: dhw_temperature
+#      water_target_temperature:
+#        name: "DHW Target Temperature"
+#        id: dhw_target_temperature
+#      water_heater_mode:
+#        name: "Hotwater Mode"
+#      water_heater_power:
+#        name: "DHW Status"
+#        id: dhw_status
+#      water_outlet_target:
+#        name: "Target Flow Temperature"
+#        id: target_flow_temperature
+    #  indoor_eva_in_temperature: 
+    #    name: "indoor_eva_in_temperature"
+    #  indoor_eva_out_temperature: 
+    #    name: "indoor_eva_out_temperature"
+
+
+    #  room_temperature:
+    #    name: "Room Temp"
+
 
       # Creates climate control in Home Assistant. A climate control combines multiple of the controls below (like temperature, mode etc.)
-      #climate:
-      #  name: "Kitchen climate"
+   #   climate:
+   #     name: "EHS climate"
 
-      # The controls directly below are all included in the climate control. Its adviced to only add the climate control and skip the extra controls.
-      #room_temperature:
-      #  name: "Kitchen temperature"
-      #target_temperature:
-      #  name: "Kitchen target temperature"
-      #power:
-      #  name: "Kitchen power"
-      #mode:
-      #  name: "Kitchen mode"
+    #   # The controls directly below are all included in the climate control. Its adviced to only add the climate control and skip the extra controls.
+#      room_temperature:
+#        name: "EHS room temperature"
+#      target_temperature:
+#        name: "EHS target room temperature"
+      power:
+        name: "CH Status"
+        id: ch_status
+     # mode:
+     #   name: "EHS mode"
 
-      # If your AC sits near or inside the ceiling, the reported room temperature is often a little bit heigher then whats 
-      # measured below. This property can be used to correct that value.
-      #room_temperature_offset: -1.4
-
-      # Only supported on NASA devices
-      #room_humidity:
-      #  name: "Kitchen humidity"
-
-      # Only supported on NASA based heatpumps
-      #water_temperature:
-      #  name: "Warm water"
-      #outdoor_temperature: # Should be used with outdoor device address
-      #  name: "Outdoor temperature"
-      #power_consumption: # Should be used with outdoor device address
-      #  name: "Power consumption"
-      #energy_consumption: # Should be used with outdoor device address
-      #  name: "Energy consumption"
-      #energy_produced: # Indoor
-      #  name: "Energy Produced"
-      #indoor_power_consumption: # Never seen on my setup
-      #  name: "Indoor consumption"
-
-      # custom climate allow to define custom addresses and behaviour for many climate components
-      # Addresses are more or less described on the file xlxs (link)
-      # enabling debug_log_messages: true under the samsung_ac section, you can look at sent data directly from ESP web loger. 
-      # Most of temperatura are in celsius with a /10 formula.
+   
+    #   # If your AC sits near or inside the ceiling, the reported room temperature is often a little bit heigher then whats 
+    #   # measured below. This property can be used to correct that value.
+    #   room_temperature_offset: -1.4
       custom_climate:
-        - name: "Water heater"
+        - name: "Hot Water"
           status_addr: 0x4237 # mandatory address regarding status temperature
           set_addr: 0x4235    # mandatory address regarding setpoint temperature
           set_min: 40         # optional, default = 25°C
-          set_max: 55         # optional, default = 65°C
+          set_max: 65         # optional, default = 65°C
           enable_addr: 0x4065 # mandatory enabling address, only 1/0 should be written there. Look at mode sub section
                               # By default the value is set = 1 when HA send a value > 0.
           preset:         
@@ -156,7 +226,7 @@ samsung_ac:
         - name: "Heating"
           status_addr: 0x4238
           set_addr: 0x4247
-          set_min: 8          # large enough to let both ranges for heating (25-65)°C and cooling (8-25)°C
+          set_min: 25          # large enough to let both ranges for heating (25-65)°C and cooling (8-25)°C
           set_max: 65
           enable_addr: 0x4000
           mode:
@@ -166,7 +236,7 @@ samsung_ac:
                               # a value of CLIMATE_MODE_OFF is sent to HA regardless of the value of the register mode->addr
             #ClimateMode0Value:  # Default -1 = CLIMATE_MODE_OFF is not translated into mode->addr
             #ClimateMode1Value:  # Default -1 = CLIMATE_MODE_HEAT_COOL is not translated into mode->addr     
-            ClimateMode2Value: 1 # Default -1. Setting =1 the value CLIMATE_MODE_COOL==2 is translated as 1 into mode->addr
+          #  ClimateMode2Value: 1 # Default -1. Setting =1 the value CLIMATE_MODE_COOL==2 is translated as 1 into mode->addr
             ClimateMode3Value: 4 # Default -1. Setting = 4 the value CLIMATE_MODE_HEAT==3 is translated as 4 into mode->addr
             #ClimateMode4Value: -1
             #ClimateMode5Value: -1
@@ -175,57 +245,655 @@ samsung_ac:
             temperature_step:
               target_temperature: 0.1
               current_temperature: 0.1
-              
-      custom_sensor:
-        - name: Produced energy
-          message: 0x4427
-          device_class: energy
-          state_class: total_increasing
-          unit_of_measurement: kWh
 
-    - address: "10.00.00" # external unit
+        - name: "Water Law Offset"
+          id: wl_offset
+          status_addr: 0x4248
+          set_addr: 0x4248
+          enable_addr: 0x4000
+          set_min: -5          
+          set_max: 5
+          visual:
+            temperature_step:
+              target_temperature: 0.1
+              current_temperature: 0.1    
+
+#        - name: "Sim HW Temp Nasa"
+#          id: sim_hw_temp_nasa
+#          set_addr: 0x4237    # mandatory address regarding setpoint temperature
+ #         set_min: 40         # optional, default = 25°C
+#          enable_addr: 1 # mandatory enabling address, only 1/0 should be written there. Look at mode sub section
+#          visual:
+ #           temperature_step:
+  #            target_temperature: 0.1
+     #         current_temperature: 0.1
+  
+      custom_sensor:      
+        - name: Inv Pump Duty
+          message: 0x40C4
+          device_class: power_factor
+          state_class: measurement
+          unit_of_measurement: "%"
+          accuracy_decimals: 1
+
+        - name: Flow Rate
+          message: 0x42E9
+          id: flow_rate
+          device_class: volume_flow_rate
+          state_class: measurement
+          unit_of_measurement: "lpm"
+          icon: "mdi:pipe"
+          accuracy_decimals: 1
+          filters:
+            - multiply: 0.1
+
+        - name: "Set Flow Temperature"
+          message: 0x4247
+          id: set_flow_temperature
+          device_class: temperature
+          state_class: measurement
+          unit_of_measurement: "ºC"
+          accuracy_decimals: 1
+          filters:
+            - multiply: 0.1
+
+        - name: "DHW Temperature"
+          message: 0x4237
+          id: dhw_temperature
+          device_class: temperature
+          state_class: measurement
+          unit_of_measurement: "ºC"
+          accuracy_decimals: 1
+          filters:
+            - multiply: 0.1
+
+        - name: "DHW Target Temperature"
+          message: 0x4235
+          id: dhw_target_temperature
+          device_class: temperature
+          state_class: measurement
+          unit_of_measurement: "ºC"
+          accuracy_decimals: 1
+          filters:
+            - multiply: 0.1
+
+        
+
+
+        - name: Water Law Target
+          message: 0x4248
+          device_class: temperature
+          state_class: measurement
+          unit_of_measurement: C
+          accuracy_decimals: 1
+          filters:
+           - multiply: 0.1
+
+        - name: "WL Flow T"
+          message: 0x427f
+          id: wl_flow_t
+          device_class: temperature
+          state_class: measurement
+          unit_of_measurement: "ºC"
+          accuracy_decimals: 1
+          filters:
+            - multiply: 0.1
+
+
+        - name: "Threeway Valve Position"
+          message: 0x4067
+          id: threeway_valve
+          icon: "mdi:valve"
+
+        # - name: flow volate
+        #   message: 0x42E8
+
+        - name: Heat Pump Defrost
+          message: 0x402E
+          internal: true
+
+        - name: Thermo On
+          message: 0x4028
+
+        - name: Smart Grid
+          message: 0x4124
+
+        # - name: FSV1031
+        #   message: 0x424E
+        #   filters:
+        #     - multiply: 0.1
+
+        # - name: FSV1032
+        #   message: 0x424F
+        #   filters:
+        #     - multiply: 0.1
+        # - name: FSV2093
+        #   message: 0x4127
+          
+        # - name: FSV2011
+        #   message: 0x4254
+        #   filters:
+        #     - multiply: 0.1
+
+        # - name: FSV2012
+        #   message: 0x4255
+        #   filters:
+        #     - multiply: 0.1      
+
+        # - name: FSV2031
+        #   message: 0x4258
+        #   filters:
+        #     - multiply: 0.1
+
+        # - name: FSV2032
+        #   message: 0x4259
+        #   filters:
+        #     - multiply: 0.1
+
+        # - name: FSV2021
+        #   message: 0x4256
+        #   filters:
+        #     - multiply: 0.1
+
+        # - name: FSV2022
+        #   message: 0x4257
+        #   filters:
+        #     - multiply: 0.1
+            
+        - name: DHW Status
+          id: dhw_status
+          message: 0x4065
+          
+        # - name: Immersion Status
+        #   id: immersion_status
+        #   message: 0x4087
+
+        # - name: Compressor Ratio
+        #   id: compressor_ration
+        #   message: 0x42F1 
+   
+        
+  #    custom_message: 
+      
+    - address: "10.00.00" # Outdoor device address as the following components are dependent on an outdoor unit.
+      # This sensor captures and monitors specific error codes returned by the HVAC system.
+      # When an error occurs, the sensor detects the error code and updates its value accordingly.
+      # Additionally, by using the blueprint available at https://github.com/omerfaruk-aran/esphome_samsung_ac_blueprint,
+      # you can automatically send detailed error messages to your mobile devices based on the captured error codes.
+#      error_code:
+#        name: outdoor_error_code
+        
+      # This sensor measures the instantaneous power consumption of the outdoor unit in Watts.
+      # The captured value represents the current power draw of the outdoor HVAC components, helping track energy usage patterns.
+   #   outdoor_instantaneous_power:
+   #     name: "Outdoor Instantaneous Power"
+
+      # This sensor records the cumulative energy consumption of the outdoor unit in kWh.
+      # It calculates the total energy consumed over time, allowing users to monitor and analyze energy efficiency.
+   #   outdoor_cumulative_energy:
+   #     name: "Outdoor Cumulative Energy"
+
+      # This sensor measures the current drawn by the outdoor unit in Amperes.
+      # Monitoring current values helps identify electrical irregularities and ensure safe power levels in the system.
+   #   outdoor_current:
+   #     name: "Outdoor Current"
+
+      # This sensor tracks the voltage supplied to the outdoor unit in Volts.
+      # Consistent voltage readings indicate stable power delivery, while deviations can help detect electrical issues in the system.
+      #outdoor_voltage:
+      #  name: "Outdoor Voltage"
+
+      # Only supported on NASA based heatpumps
+
+#      outdoor_temperature: # Should be used with outdoor device address
+#        name: "Outdoor temperature"
+#        id: outdoor_temperature
+
       custom_sensor:
-        - name: External temperature
+
+        - name: Heat Pump Operating Mode
+          message: 0x8001
+
+        - name: "Compressor Frequency"
+          message: 0x8238
+          id: compressor_frequency
+          device_class: frequency
+          state_class: measurement
+          unit_of_measurement: Hz
+          icon: "mdi:sine-wave"
+          accuracy_decimals: 1
+
+          
+   
+ #       - name: Target Compressor Frequency
+ #         message: 0x8237
+ #         device_class: frequency
+  #        state_class: measurement
+   #       unit_of_measurement: Hz
+    #      accuracy_decimals: 1
+        - name: "Fan Speed"
+          message: 0x823D
+          id: fan_speed
+          device_class: speed
+          state_class: measurement
+          unit_of_measurement: RPM
+          icon: mdi:fan
+          accuracy_decimals: 1
+
+        - name: "Return Temperature"
+          message: 0x82DF
+          id: return_temperature
+          device_class: temperature
+          state_class: measurement
+          unit_of_measurement: "ºC"
+          accuracy_decimals: 1
+          filters:
+            - multiply: 0.1
+
+        - name: "Flow Temperature"
+          message: 0x82E0
+          id: flow_temperature
+          device_class: temperature
+          state_class: measurement
+          unit_of_measurement: "ºC"
+          accuracy_decimals: 1
+          filters:
+            - multiply: 0.1
+
+
+      #  - name: Defrost 0x8000
+      #    message: 0x8000
+      #    internal: true
+          
+      #  - name: Defrost 0x8061
+      #    message: 0x8061
+      #    internal: true
+          
+      
+        - name: Defrost 0x8062
+          message: 0x8062
+         # internal: true
+
+        - name: Error Code
+          message: 0x0202    
+
+        - name: Outdoor Temperature
+          id: outdoor_temperature
           message: 0x8204
           device_class: temperature
           state_class: measurement
           unit_of_measurement: "°C"
           filters:
             - multiply: 0.1
-          accuracy_decimals: 1
-        - name: Power consumption
-          message: 0x8413
-          device_class: power
-          state_class: measurement
-          unit_of_measurement: W
-        - name: Consumed energy
-          message: 0x8414
-          device_class: energy
-          state_class: total_increasing
-          unit_of_measurement: kWh
-          accuracy_decimals: 1
-          filters:
-            - multiply: 0.001
-        - name: Heat pump voltage
-          message: 0x24fc
-          device_class: voltage
-          state_class: measurement
-          unit_of_measurement: V
-        - name: Compressor Frequency
-          message: 0x8238
-          device_class: frequency
-          state_class: measurement
-          unit_of_measurement: Hz
-          accuracy_decimals: 1
-        - name: Target Compressor Frequency
-          message: 0x8237
-          device_class: frequency
-          state_class: measurement
-          unit_of_measurement: Hz
-          accuracy_decimals: 1
-        - name: Fan Speed
-          message: 0x823D
-          state_class: measurement
-          unit_of_measurement: RPM
-          accuracy_decimals: 1
+          accuracy_decimals: 1        
 
+        - name: Base Heater
+          id: base_heater
+          message: 0x80AF
+        #  internal: true
+          
+
+        
+        - name: PHE Heater
+          id: phe_heater
+          message: 0x80D7
+        #  internal: true
+        
+
+sensor:
+  - platform: template
+    name: "Heat Pump Heat kW"
+    id: heat_pump_heat_kw
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: 'kW'
+    lambda: |-
+      return (4.2 * (id(flow_rate).state/60) * (id(flow_temperature).state - id(return_temperature).state));
+    update_interval: 10s
+    filters:
+      - clamp:
+          min_value: -15
+          max_value: 15
+          ignore_out_of_range: true
+
+  - platform: template
+    name: "hp_dt"
+    id: hp_dt
+    device_class: temperature
+    state_class: measurement
+    unit_of_measurement: "ºC"
+    lambda: |-
+      return (id(flow_temperature).state - id(return_temperature).state);
+    update_interval: 10s
+    filters:
+      - clamp:
+          min_value: -15
+          max_value: 15
+          ignore_out_of_range: true
+
+  - platform: integration
+    name: 'Total Heat Pump Heat'
+    sensor: heat_pump_heat_kw
+    id: heatpumpheatkwh
+    time_unit: h
+    restore: True
+    unit_of_measurement: 'kWh'
+    state_class: total_increasing
+    device_class: energy
+    accuracy_decimals: 3
+    # Original ESP-ashp was at 10765.332 kWh	on 22/12/24   when Atom meter was started   was 2,735.983 on new atom on 01/02/2025
+        
+  - platform: duty_cycle
+    id: mim_pwm_output  
+    pin: 
+      number: GPIO23
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    name: MIM PWM OUTPUT
+    update_interval: 10s
+    filters:
+      - round: 0
+    on_value:
+      then:
+        - if:
+            condition:
+              and:
+              - lambda: 'return id(uptime_seconds).state > 120.0;'
+              - lambda: 'return id(mim_pwm_output).state < 90.0;'
+              - lambda: 'return id(grundfos_time_since_pump_requested).state < 30;'
+              - lambda: 'return !id(pump_override).state;'
+            then:
+            #  - logger.log: "Soft Start Active"
+              - number.set: 
+                  id: grundfos_pwm_output_control
+                  value: 60 
+        - if:
+            condition:
+              and:
+              - lambda: 'return id(uptime_seconds).state > 120.0;' # uptime greater than 2 minutes
+              - lambda: 'return id(mim_pwm_output).state < 90.0;' # pump is requested on
+              - lambda: 'return !id(pump_override).state;' # pump override is off
+              - lambda: 'return id(hw_valve_change).state;' # three way valve position has changed
+            then:
+            #  - logger.log: "HW Valve Change Pump Slowdown"
+              - number.set: 
+                  id: grundfos_pwm_output_control
+                  value: 60 
+        - if:
+            condition:
+              and:
+               - lambda: 'return id(threeway_valve).state == 1;'
+               - lambda: 'return id(mim_pwm_output).state < 90.0;'
+               - lambda: 'return id(grundfos_time_since_pump_requested).state > 30;'
+               - lambda: 'return !id(pump_override).state;'
+               - lambda: 'return !id(hw_valve_change).state;'
+            then:
+             # - logger.log: "HW is Active Speed request below 90 - speed output 18 (variable)"
+              - number.set: 
+                  id: grundfos_pwm_output_control
+                  value: !lambda "return 12+x;"
+        - if:
+            condition:
+              and:
+               - lambda: 'return id(threeway_valve).state == 0;'
+               - lambda: 'return id(mim_pwm_output).state < 90.0;'
+               - lambda: 'return id(grundfos_time_since_pump_requested).state > 30;'
+               - lambda: 'return !id(pump_override).state;'
+               - lambda: 'return !id(hw_valve_change).state;'
+               - lambda: 'return id(outdoor_temperature).state < 0;'
+            then:
+             # - logger.log: "HW is Off Speed request below 90, outdoor temperature below 0 C - speed output 14 (variable)"
+              - number.set: 
+                  id: grundfos_pwm_output_control
+                  value: !lambda "return 8+x;"
+        - if:
+            condition:
+              and:
+               - lambda: 'return id(threeway_valve).state == 0;'
+               - lambda: 'return id(mim_pwm_output).state < 90.0;'
+               - lambda: 'return id(grundfos_time_since_pump_requested).state > 30;'
+               - lambda: 'return !id(pump_override).state;'
+               - lambda: 'return !id(hw_valve_change).state;'
+               - lambda: 'return id(outdoor_temperature).state >= 0 && id(outdoor_temperature).state <= 3;'
+            then:
+             # - logger.log: "HW is Off Speed request below 90, outdoor temperature between 0 and 3 C - speed output 22 (variable)"
+              - number.set: 
+                  id: grundfos_pwm_output_control
+                  value: !lambda "return 15+x;"
+        - if:
+            condition:
+              and:
+               - lambda: 'return id(threeway_valve).state == 0;'
+               - lambda: 'return id(mim_pwm_output).state < 90.0;'
+               - lambda: 'return id(grundfos_time_since_pump_requested).state > 30;'
+               - lambda: 'return !id(pump_override).state;'
+               - lambda: 'return !id(hw_valve_change).state;'
+               - lambda: 'return id(outdoor_temperature).state > 3 && id(outdoor_temperature).state <= 10;'
+            then:
+             # - logger.log: "HW is Off Speed request below 90, outdoor temperature between 3 and 10 C - speed output 30 (variable)"
+              - number.set: 
+                  id: grundfos_pwm_output_control
+                  value: !lambda "return 24+x;"
+        - if:
+            condition:
+              and:
+               - lambda: 'return id(threeway_valve).state == 0;'
+               - lambda: 'return id(mim_pwm_output).state < 90.0;'
+               - lambda: 'return id(grundfos_time_since_pump_requested).state > 30;'
+               - lambda: 'return !id(pump_override).state;'
+               - lambda: 'return !id(hw_valve_change).state;'
+               - lambda: 'return id(outdoor_temperature).state > 10;'
+            then:
+             # - logger.log: "HW is Off Speed request below 90, outdoor temperature above 10 C - speed output 35 (variable)"
+              - number.set: 
+                  id: grundfos_pwm_output_control
+                  value: !lambda "return 29+x;"
+#        - if:
+#            condition:
+#              and:
+#              - lambda: 'return id(mim_pwm_output).state > 56.0;'
+#              - lambda: 'return id(grundfos_time_since_pump_requested).state > 30;'
+#              - lambda: 'return !id(pump_override).state;'
+#              - lambda: 'return !id(hw_valve_change).state;'
+#            then:
+#            #  - logger.log: "Speed request above 55 - input = output"
+#              - number.set: 
+#                  id: grundfos_pwm_output_control
+#                  value: !lambda "return x;" 
+
+                  
+#        - if: ## TEST FOR NO THREE WAY VALVE SIGNAL AND OVERRRIDE TO MIM INPUT - PUMP OUTPUT
+#            condition:
+#              and:
+#              - lambda: 'return !id(soft_start).state;'
+#              - lambda: 'return !id(pump_override).state;'
+#              - lambda: 'return id(threeway_valve).state == NAN;'
+#            then:
+#            #  - logger.log: "No NAS signal, input - output"
+#              - number.set: 
+#                  id: grundfos_pwm_output_control
+#                  value: !lambda "return x;" 
+
+
+# hashed because rapid cycling of output value
+#        - if:
+#            condition:
+#              and:
+#              - lambda: 'return id(mim_pwm_output).state > 95.0;' # mim pump output set off
+#              - lambda: 'return id(ch_status).state;' # call for heat is on
+#              - lambda: 'return !id(pump_override).state;' # pump override os off
+#            then:
+#            #  - logger.log: "Heating call for heat is on - Pump Requested Off - circulate at low speed"  
+#              - sensor.duty_time.reset: grundfos_time_since_pump_requested
+#              - number.set: 
+#                  id: grundfos_pwm_output_control
+#                  value: 73 
+
+        - if:
+            condition:
+              and:
+              - lambda: 'return id(mim_pwm_output).state > 95.0;'
+              - lambda: 'return !id(pump_override).state;'
+            then:
+            #  - logger.log: "Speed request above 95 - Pump Requested Off"  
+              - sensor.duty_time.reset: grundfos_time_since_pump_requested
+              - number.set: 
+                  id: grundfos_pwm_output_control
+                  value: 100 
+#        - if:
+#            condition:
+#              lambda: |-
+#                return id(mim_pwm_output).state < 10.0;
+#            then:
+#              - logger.log: "Speed request below 10 - Pump Requested MAX"    
+   
+  - platform: duty_time
+    id: grundfos_time_since_pump_requested
+    name: Grundfos Time Since Pump Requested
+    update_interval: 30s
+    lambda: "return id(mim_pwm_output).state < 90;"
+    # Restore (optional, default: False)
+    restore: false
+    # Sensor for last turn-on time (optional)
+    #last_time:
+    #  name: Grundfos Pump Last Turn-On Time
+
+#  - platform: duty_cycle
+#    id: grundfos_feedback_pwm
+#    pin: 
+#      number: GPIO33
+#      inverted: true
+#      mode:
+#        input: true
+#        pullup: true
+#    name: Grundfos Feedback PWM
+#    update_interval: 20s
+#    filters:
+#      - heartbeat: 20s
+#      - round: 0
+#    on_value_range: 
+#      - above: 0
+#        below: 70
+#        then: 
+#            - sensor.template.publish:    
+#                id: pump_power
+#                state: !lambda 'return x * 2;'
+#      - above: 70
+#        then: 
+#          - sensor.template.publish:    
+#              id: pump_power
+#              state: 0.0
+#            #
+#
+#  - platform: template
+#    name: "Pump Power"
+#    id: pump_power
+#    device_class: power
+#    unit_of_measurement: W
+    
+#    filters:
+ #   on_value:
+#      then:
+#        - climate.control:
+ #           id: sim_hw_temp_nasa
+ #           target_temperature: !lambda return (id(sim_hw_temp_sunamp).state);
+
+       #         id(sim_hw_temp_nasa).target_temperature
+#0x4237
+# 0 = 40 C
+# 25 = 47.5 C
+# 50 = 52.5 C
+# 75 = 57.5 C
+# 100 = 65 C
+# 110 = 75 C
+# id: dhw_temperature
+
+
+
+
+## Device-specific
+
+#light:
+#  - platform: neopixelbus
+#    type: GRB
+#    variant: WS2812
+#    pin: 27
+#    num_leds: 1
+#    name: "Status LED"
+#    id: status_led
+#    internal: true
+#    effects:
+#      - random:
+#      - flicker:
+#      - addressable_rainbow:
+
+
+
+#  - platform: template
+#    name: "Soft Start Period"
+#    id: soft_start
+#    lambda: |-
+#      if (id(grundfos_time_since_pump_requested).state < 30) {
+#        // Soft Start Period.
+#        return true;
+#      } else {
+#        // Not Soft Start Period.
+#        return false;
+#      }
+
+
+
+
+  - platform: uptime
+    type: seconds
+    id: uptime_seconds
+    
+
+       
+#  Basic switch to allow you to restart the device remotely
+switch:
+  - platform: restart
+    name: Restart
+     
+# Switch to turn off grundfos PWM output rules and allow control from number controller
+  - platform: template
+    name: pump_override
+    id: pump_override 
+    optimistic: True 
+
+button:
+  - platform: template
+    name: Reset Total Energy Counter
+    id: meter_reset
+    internal: True
+    on_press:
+      - sensor.integration.reset:  heatpumpheatkwh
+      
+binary_sensor:
+  - platform: template
+    name: "HW Valve"
+    id: hw_valve
+    lambda: |-
+      if (id(threeway_valve).state == 1) {
+        // HW Valve On.
+        return true;
+      } else {
+        // HW VAlve Off.
+        return false;
+      }
+    on_state: 
+      then:
+        - binary_sensor.template.publish:
+            id: hw_valve_change
+            state: ON
+        - delay: 60 seconds
+        - binary_sensor.template.publish:
+            id: hw_valve_change
+            state: OFF
+
+
+  - platform: template
+    name: "HW Valve Change"
+    id: hw_valve_change
