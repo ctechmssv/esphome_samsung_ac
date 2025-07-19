@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Samsung Air Conditioner NASA Protocol
 
 The document describes the data format witch is used by newer Samsung Air condiationers in communication from indoor to outdoor units.
@@ -15,3 +16,22 @@ Before the message starts there can be a preamble 0x55 witch can be 100 bytes lo
 Max packet size 1500 byte.
 Min packet size 16 byte.
 Timeout send/recv 1000ms
+=======
+# Samsung Air Conditioner NASA Protocol
+
+The document describes the data format witch is used by newer Samsung Air condiationers in communication from indoor to outdoor units.
+Older units use the Non-NASA protocol witch DannyDeGaspari described here https://github.com/DannyDeGaspari/Samsung-HVAC-buscontrol.
+
+> Most of the stuff here is from reverse engeneering Samsungs "SNET Pro Service Software V1.5.3 (NASA)" Software.
+> This software is build in Microsofts dotnet and can simply be decompiled an read in example via ILSpy.
+
+### Preamble
+
+Before the message starts there can be a preamble 0x55 witch can be 100 bytes long. Its not clear whats the purpose of this.
+
+### Basics
+
+Max packet size 1500 byte.
+Min packet size 16 byte.
+Timeout send/recv 1000ms
+>>>>>>> e00da693bf63acb569b92f4dae73e856ed149366

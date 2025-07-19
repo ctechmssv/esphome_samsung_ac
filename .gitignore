@@ -1,4 +1,11 @@
+<<<<<<< HEAD
 *.exe
 __pycache__
 .esphome
 test.exe
+=======
+*.exe
+__pycache__
+.esphome
+test.exe
+>>>>>>> e00da693bf63acb569b92f4dae73e856ed149366
