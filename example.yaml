@@ -90,7 +90,7 @@ uart:
 external_components:
   - source:
       type: local
-      path: components
+      path: /c%3A/temp/espsamsung/esphome_samsung_ac/components
     components: [samsung_ac]
 
 # Configuration of AC component
