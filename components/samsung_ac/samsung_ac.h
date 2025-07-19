@@ -6,6 +6,7 @@
 #include <queue>
 #include "esphome/core/component.h"
 #include "esphome/components/uart/uart.h"
+#include "esphome/core/gpio.h"
 #include "samsung_ac_device.h"
 #include "protocol.h"
 
@@ -46,6 +47,8 @@ namespace esphome
       {
         debug_log_raw_bytes = value;
       }
+
+      void set_flow_control_pin(GPIOPin *pin) { flow_control_pin_ = pin; }
 
       void register_device(Samsung_AC_Device *device);
 
@@ -171,6 +174,8 @@ namespace esphome
       uint16_t debug_mqtt_port = 1883;
       std::string debug_mqtt_username = "";
       std::string debug_mqtt_password = "";
+      
+      GPIOPin *flow_control_pin_{nullptr};
     };
 
   } // namespace samsung_ac

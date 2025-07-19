@@ -88,9 +88,10 @@ uart:
   #  components: [samsung_ac]
   
 external_components:
-  - source: github://ctechmssv/esphome_samsung_ac@rs485-fixes  #testSignedInt
+  - source:
+      type: local
+      path: components
     components: [samsung_ac]
-    refresh: 0s
 
 # Configuration of AC component
 samsung_ac:
@@ -101,9 +102,8 @@ samsung_ac:
   debug_mqtt_username: user
   debug_mqtt_password: password
 
-
   flow_control_pin: GPIO33
-
+  
   # For NonNASA devices the following option can be enabled to prevent the device from sleeping when idle. This allows
   # values like internal and external temperature to continue to be tracked when the device isn't in use.
   #non_nasa_keepalive: true
@@ -305,6 +305,7 @@ samsung_ac:
           unit_of_measurement: "ºC"
           accuracy_decimals: 1
           filters:
+            - lambda: return (int16_t)x;
             - multiply: 0.1
 
         - name: "DHW Target Temperature"
@@ -315,6 +316,7 @@ samsung_ac:
           unit_of_measurement: "ºC"
           accuracy_decimals: 1
           filters:
+            - lambda: return (int16_t)x;
             - multiply: 0.1
 
         
@@ -327,6 +329,7 @@ samsung_ac:
           unit_of_measurement: C
           accuracy_decimals: 1
           filters:
+           - lambda: return (int16_t)x;
            - multiply: 0.1
 
         - name: "WL Flow T"
@@ -337,6 +340,7 @@ samsung_ac:
           unit_of_measurement: "ºC"
           accuracy_decimals: 1
           filters:
+            - lambda: return (int16_t)x;
             - multiply: 0.1
 
 
@@ -498,6 +502,7 @@ samsung_ac:
           unit_of_measurement: "ºC"
           accuracy_decimals: 1
           filters:
+            - lambda: return (int16_t)x;
             - multiply: 0.1
 
 
@@ -524,6 +529,7 @@ samsung_ac:
           state_class: measurement
           unit_of_measurement: "°C"
           filters:
+            - lambda: return (int16_t)x;
             - multiply: 0.1
           accuracy_decimals: 1        
 

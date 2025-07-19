@@ -11,6 +11,11 @@ namespace esphome
     void Samsung_AC::setup()
     {
       ESP_LOGW(TAG, "setup");
+      
+      if (flow_control_pin_ != nullptr) {
+        flow_control_pin_->setup();
+        flow_control_pin_->digital_write(false); // Start in receive mode
+      }
     }
 
     void Samsung_AC::update()
@@ -76,8 +81,19 @@ namespace esphome
     void Samsung_AC::publish_data(std::vector<uint8_t> &data)
     {
       ESP_LOGW(TAG, "write %s", bytes_to_hex(data).c_str());
+      
+      if (flow_control_pin_ != nullptr) {
+        flow_control_pin_->digital_write(true); // Enable transmit mode
+        delayMicroseconds(10); // Small delay to ensure DE is stable
+      }
+      
       this->write_array(data);
       this->flush();
+      
+      if (flow_control_pin_ != nullptr) {
+        delayMicroseconds(100); // Wait for transmission to complete
+        flow_control_pin_->digital_write(false); // Enable receive mode
+      }
     }
 
     void Samsung_AC::loop()

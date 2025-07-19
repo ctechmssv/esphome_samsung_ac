@@ -13,6 +13,7 @@ AUTO_LOAD = ["sensor", "switch", "select", "number", "climate"]
 MULTI_CONF = False
 
 CONF_SAMSUNG_AC_ID = "samsung_ac_id"
+CONF_FLOW_CONTROL_PIN = "flow_control_pin"
 
 samsung_ac = cg.esphome_ns.namespace("samsung_ac")
 Samsung_AC = samsung_ac.class_(
@@ -280,6 +281,9 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_DEBUG_MQTT_PASSWORD, default=""): cv.string,
             cv.Optional(CONF_DEBUG_LOG_MESSAGES, default=False): cv.boolean,
             cv.Optional(CONF_DEBUG_LOG_MESSAGES_RAW, default=False): cv.boolean,
+            cv.Optional(CONF_FLOW_CONTROL_PIN): cv.gpio_pin_schema(
+                {CONF_MODE: {CONF_OUTPUT: True}}
+            ),
             cv.Optional(CONF_CAPABILITIES): CAPABILITIES_SCHEMA,
             cv.Required(CONF_DEVICES): cv.ensure_list(DEVICE_SCHEMA),
             cv.Optional(CONF_debug_number) : cv.ensure_list(number.NUMBER_SCHEMA.extend({
@@ -301,6 +305,11 @@ async def to_code(config):
         cg.add_library("heman/AsyncMqttClient-esphome", "2.0.0")
 
     var = cg.new_Pvariable(config[CONF_ID])
+    
+    if CONF_FLOW_CONTROL_PIN in config:
+        pin = await cg.gpio_pin_expression(config[CONF_FLOW_CONTROL_PIN])
+        cg.add(var.set_flow_control_pin(pin))
+
     for device_index, device in enumerate(config[CONF_DEVICES]):
         var_dev = cg.new_Pvariable(
             device[CONF_DEVICE_ID], device[CONF_DEVICE_ADDRESS], var)
